@@ -1,0 +1,110 @@
+---
+title: "ANOVA em duas vias no R"
+author: "Jamily Santos"
+date: "31/08/2022"
+output: html_document
+---
+
+# Carregamento dos pacotes
+```{r Pacotes, message=F, warning=F}
+library(dplyr)
+library(car)
+library(rstatix)
+library(emmeans)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(htmltools)
+```
+
+#Leitura e vizualização de dados
+
+```{r Leitura de banco de dados}
+dados = read.csv2("~/2022.2/Projetos/R markdow/Relatório em R Markdow parte 2/Banco de Dados 6.csv")
+glimpse(dados)
+```
+
+
+```{r}
+kable(head(dados, 10), col.names = c("Gênero", "Alcool", "Memória", "Latência"))%>%
+  kable_styling(full_width = F, bootstrap_options =c("striped", "hover", "condensed", "responsive") )
+```
+
+<br> # pular linha
+
+```{r}
+nrow(dados[which(dados$Genero=="Feminino"),])
+``` 
+
+O banco de dados possui `r nrow(dados)` sujeitos experimentais, sendo `r nrow(dados[which(dados$Genero=="Feminino"),])` do gênero feminino.
+
+## Ordenando a variável "Alcool".
+
+Colocar as categorias em ordem lógica (nenhum consumo, duas canecas e quatro canecas) vai facilitar a vizualização dos dados no gráfico.
+
+```{r Ordenando Alcool}
+dados$Alcool <- factor(dados$Alcool,
+                       levels = c("Nenhum",
+                                  "2 Canecas",
+                                  "4 Canecas"))
+```
+
+
+## NOrmalidade
+
+A variável dependente "Mentoria" deve apresentar distribuição aproximadamente normal, dentro de cada grupo. Os grupos aqui serão formados pela combinação das duas variáveis independentes ("Gênero" e "Alcool"). A normalidade será avaliada pelo teste de Shapiro-wilk
+
+```{r shapiro por grupo}
+dados %>% group_by(Genero,Alcool)%>% shapiro_test(Memoria)
+```
+
+Todos os grupos apresentam distribuição normal (valores de p superiores a 0,05).
+
+## Ausência de *Outliers*
+Outro pressuposto da ANOVA é a ausencia de *Outliers* em todos os grupos. Isso pode ser verificado através de um gráfico do tipo boxplot
+
+```{r Boxplot}
+boxplot(dados$Memoria~dados$Genero:dados$Alcool, names = c("F N", "M N", "F 2C", "M 2C", "F 4C", "M 4C"))
+```
+
+Os gráficos mostram que não há *Outliers* nos grupos analisados.
+
+## Homogeneidade das variâncias
+
+Outro pressuposto da ANOVA é que os grupos apresentem variâncias homogêneas. Esse pressuposto será analisado aqui pelo teste de Levene.
+
+```{r Levene}
+leveneTest(Memoria~Genero*Alcool, dados, center = mean)
+```
+
+Os resultados indicam que as variâncias são homogêneas, uma vez que o teste de Levene apresentou p superior a 0,05.
+
+# Realizando o teste de ANOVA em duas vias
+
+## Trocando o tipo de contraste
+Para essa análise, será utilizado o contraste "soma".
+
+```{r constraste}
+options(contrasts = c("contr.sum", "contr.poly"))
+```
+
+## Criação do modelo de ANOVA
+Será criado um  modelo de ANOVA usando a função `aov`. O modelo escolhido é um modelo fatorial completo, que inclui os efeitos principais das variáveis independentes "Genero" e "Alcool" bem como a interação entre elas.
+
+```{r Modelo ANOVA}
+mod.ANOVA <- aov(Memoria ~Genero*Alcool, dados)
+```
+
+## Análise dos resultados do modelo
+Para avaliar a significância das variáveis independentes e da sua interação, será utilizada a soma de quadrados do tipo III. Mais informações sobre os tipos de soma dos quadrados podem ser encontradas no livro "Discovering Using R"[^1].
+
+[^1]: Field, A. P., Miles, J., & Fields, Z. (2012). Discovering statistics using R.
+
+```{r}
+Anova(mod.ANOVA, type = "III")
+```
+O resultado nos indica que há efeito do "Alcool" [F(2,42) = 20,07: p < 0,001] e da interação entre "Gênero" e "Alcool" [F(0,42) = 11,91: p < 0,001] sobre memória. Dado que existe interação, os efeitos principais não devem ser interpretados. Para investigar melhor essa interação, será feito um gráfico de linhas.
+
+
+
+
